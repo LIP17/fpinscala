@@ -39,7 +39,10 @@ object Tree {
 
 	def sizeWithFold[A](tree: Tree[A]): Int = fold(tree)(_ => 1)(1 + _ + _)
 
-	def maximumWithFold[A] =
+	def maximumWithFold(tree: Tree[Int]): Int = fold(tree)(v => v)(_ max _)
 
+	def depthWithFold[A](tree: Tree[A]): Int = fold(tree)(_ => 0)((l, r) => 1 + l + r)
 
+	// need to cast Leaf to tree because Leaf narrow down the inheritance scope
+	def mapWithFold[A, B](tree: Tree[A])(f: A => B): Tree[B] = fold(tree)(a => Leaf(f(a)): Tree[B])(Branch(_, _))
 }
