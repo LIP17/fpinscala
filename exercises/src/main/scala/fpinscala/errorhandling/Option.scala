@@ -4,15 +4,35 @@ package fpinscala.errorhandling
 import scala.{Option => _, Some => _, Either => _, _} // hide std library `Option`, `Some` and `Either`, since we are writing our own in this chapter
 
 sealed trait Option[+A] {
-  def map[B](f: A => B): Option[B] = sys.error("todo")
+  // ex1: Apply f if the option is not None
+  def map[B](f: A => B): Option[B] = this match {
+    case None => None
+    case Some(v) => Some(f(v))
+  }
 
-  def getOrElse[B>:A](default: => B): B = sys.error("todo")
+  // ex1: The B >: A says that the B type parameter must be a supertype of A
+  def getOrElse[B>:A](default: => B): B = this match {
+    case None => default
+    case Some(v) => v
+  }
 
-  def flatMap[B](f: A => Option[B]): Option[B] = sys.error("todo")
+  // ex1: Apply f, which may fail, to the Option if not None
+  def flatMap[B](f: A => Option[B]): Option[B] = this match {
+    case None => None
+    case Some(v) => f(v)
+  }
 
-  def orElse[B>:A](ob: => Option[B]): Option[B] = sys.error("todo")
+  // ex1: Don't evaluate ob unless it is needed
+  def orElse[B>:A](ob: => Option[B]): Option[B] = this match {
+    case None => ob
+    case _ => this
+  }
 
-  def filter(f: A => Boolean): Option[A] = sys.error("todo")
+  // ex1: Convert Some to None if the value does not satisfy f
+  def filter(f: A => Boolean): Option[A] = this match {
+    case Some(v) if(f(v)) => this
+    case _ => None
+  }
 }
 case class Some[+A](get: A) extends Option[A]
 case object None extends Option[Nothing]
@@ -38,11 +58,28 @@ object Option {
   def mean(xs: Seq[Double]): Option[Double] =
     if (xs.isEmpty) None
     else Some(xs.sum / xs.length)
-  def variance(xs: Seq[Double]): Option[Double] = sys.error("todo")
 
-  def map2[A,B,C](a: Option[A], b: Option[B])(f: (A, B) => C): Option[C] = sys.error("todo")
+  // ex2:
+  def variance(xs: Seq[Double]): Option[Double] = mean(xs) flatMap (m => mean(xs.map(x => math.pow(x - m, 2))))
 
-  def sequence[A](a: List[Option[A]]): Option[List[A]] = sys.error("todo")
+  // ex3: return None if any of a or b is None
+  // nice try!
+  def map2[A,B,C](a: Option[A], b: Option[B])(f: (A, B) => C): Option[C] = a flatMap (va => b map (vb => f(va, vb)))
 
-  def traverse[A, B](a: List[A])(f: A => Option[B]): Option[List[B]] = sys.error("todo")
+  // ex4: write a function combines a list of Options into one option containing a list of all the Some values inn the original list. If the
+  // original list contains None even once, the result of the function should be None.
+  def sequence[A](a: List[Option[A]]): Option[List[A]] = a match {
+    case Nil => Some(Nil)
+    case head :: tail => head flatMap(headValue => sequence(tail) map (headValue :: _))
+  }
+
+  def sequenceWithFoldright[A](a: List[Option[A]]): Option[List[A]] =
+    a.foldRight[Option[List[A]]](Some(Nil))((x, y) => map2(x, y)(_ :: _))
+
+  // ex5: traverse the list once
+  def traverse[A, B](a: List[A])(f: A => Option[B]): Option[List[B]] =
+    a.foldRight[Option[List[B]]](Some(Nil))((head, tail) => map2(f(head), tail)(_ :: _))
+
+  def sequenceWithTraverse[A](a: List[Option[A]]): Option[List[A]] =
+    traverse(a)(optionA => optionA)
 }
