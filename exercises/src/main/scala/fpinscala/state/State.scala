@@ -30,23 +30,56 @@ object RNG {
       (f(a), rng2)
     }
 
-  def nonNegativeInt(rng: RNG): (Int, RNG) = ???
+  def nonNegativeInt(rng: RNG): (Int, RNG) = {
+    val (n, nextRng) = rng.nextInt
+    if(n < 0) (-(n + 1), nextRng) else (n, nextRng)
+  }
 
-  def double(rng: RNG): (Double, RNG) = ???
+  def double(rng: RNG): (Double, RNG) = {
+    val (n, nextRng) = nonNegativeInt(rng)
+    (n / (Int.MaxValue.toDouble + 1), nextRng)
+  }
 
-  def intDouble(rng: RNG): ((Int,Double), RNG) = ???
+  def intDouble(rng: RNG): ((Int,Double), RNG) = {
+    val (n1, next1) = nonNegativeInt(rng)
+    val (n2, next2) = double(next1)
+    ((n1, n2), next2)
+  }
 
-  def doubleInt(rng: RNG): ((Double,Int), RNG) = ???
+  def doubleInt(rng: RNG): ((Double,Int), RNG) = {
+    val ((d, i), nextRng) = intDouble(rng)
+    ((i, d), nextRng)
+  }
 
-  def double3(rng: RNG): ((Double,Double,Double), RNG) = ???
+  def double3(rng: RNG): ((Double,Double,Double), RNG) = {
+    val (d1, n1) = double(rng)
+    val (d2, n2) = double(n1)
+    val (d3, n3) = double(n2)
+    ((d1, d2, d3), n3)
+  }
 
-  def ints(count: Int)(rng: RNG): (List[Int], RNG) = ???
+  def ints(count: Int)(rng: RNG): (List[Int], RNG) = {
+    @annotation.tailrec
+    def helper(count: Int, acc: List[Int])(rng: RNG): (List[Int], RNG) = {
+      if(count == 0) (acc, rng)
+      else {
+        val (n, nextRng) = rng.nextInt
+        helper(count - 1, n :: acc)(nextRng)
+      }
+    }
+    helper(count, List())(rng)
+  }
+  def map[A,B](s: Rand[A])(f: A => B): Rand[B] = ???
+
+  val doubleWithType: Rand[Double] = map(nonNegativeInt)(_ / (Int.MaxValue.toDouble + 1))
+
 
   def map2[A,B,C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] = ???
 
   def sequence[A](fs: List[Rand[A]]): Rand[List[A]] = ???
 
   def flatMap[A,B](f: Rand[A])(g: A => Rand[B]): Rand[B] = ???
+
 }
 
 case class State[S,+A](run: S => (A, S)) {
@@ -67,4 +100,10 @@ case class Machine(locked: Boolean, candies: Int, coins: Int)
 object State {
   type Rand[A] = State[RNG, A]
   def simulateMachine(inputs: List[Input]): State[Machine, (Int, Int)] = ???
+}
+
+object Test extends App {
+  import fpinscala.state.RNG.Simple
+  println(RNG.unit(3)(Simple(3)))
+  println(RNG.unit(3)(Simple(3)))
 }
