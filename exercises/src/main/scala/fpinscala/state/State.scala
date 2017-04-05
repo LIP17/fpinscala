@@ -69,16 +69,45 @@ object RNG {
     }
     helper(count, List())(rng)
   }
-  def map[A,B](s: Rand[A])(f: A => B): Rand[B] = ???
 
   val doubleWithType: Rand[Double] = map(nonNegativeInt)(_ / (Int.MaxValue.toDouble + 1))
 
+  def map2[A,B,C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] =
+    rng => {
+      val (a, rnga) = ra(rng)
+      val (b, rngb) = rb(rnga)
+      (f(a, b), rngb)
+    }
 
-  def map2[A,B,C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] = ???
+  // ex7: if we can combine two RNG transition, we should be able to combine a whole
+  // list of them
+  def sequence[A](fs: List[Rand[A]]): Rand[List[A]] = fs.foldRight(unit(List[A]()))((h, tail) => map2(h, tail)(_ :: _))
 
-  def sequence[A](fs: List[Rand[A]]): Rand[List[A]] = ???
+  def intsWithSequence(count: Int)(rng: RNG): (List[Int], RNG) =
+    sequence[Int](List.fill(count)(int))(rng)
 
-  def flatMap[A,B](f: Rand[A])(g: A => Rand[B]): Rand[B] = ???
+  // ex8: implement flatMap and then use it to implement positiveLessThan
+  def flatMap[A,B](f: Rand[A])(g: A => Rand[B]): Rand[B] =
+    rng => {
+      val (a, rnga) = f(rng)
+      g(a)(rnga)
+    }
+
+  // generates an integer between 0(inclusive) and n(exclusive)
+  def positiveLessThan(n: Int): Rand[Int] = flatMap(nonNegativeInt){
+    i => {
+      val mod = i % n
+      if(i + (n - 1) - mod > 0) unit(mod) else positiveLessThan(n)
+    }
+  }
+
+  // ex9: implement map and map2 with flatMap
+  def mapWithFlatMap[A,B](s: Rand[A])(f: A => B): Rand[B] = flatMap[A, B](s)(a => unit(f(a)))
+
+  def map2WithFlatMap[A,B,C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] = flatMap[A, C](ra)(a => mapWithFlatMap[B, C](rb)(b => f(a, b)))
+
+
+
 
 }
 
@@ -104,6 +133,12 @@ object State {
 
 object Test extends App {
   import fpinscala.state.RNG.Simple
-  println(RNG.unit(3)(Simple(3)))
-  println(RNG.unit(3)(Simple(3)))
+
+  val a = new Simple(123)
+  println(RNG.positiveLessThan(3)(a)._1)
+  println(RNG.positiveLessThan(3)(a)._1)
+  println(RNG.positiveLessThan(3)(a)._1)
+
+
+
 }
