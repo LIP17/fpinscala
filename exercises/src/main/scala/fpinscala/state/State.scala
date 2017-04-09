@@ -106,18 +106,28 @@ object RNG {
 
   def map2WithFlatMap[A,B,C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] = flatMap[A, C](ra)(a => mapWithFlatMap[B, C](rb)(b => f(a, b)))
 
-
-
-
 }
 
 case class State[S,+A](run: S => (A, S)) {
+  // ex10 implement map, map2, flatMap for State
   def map[B](f: A => B): State[S, B] =
-    sys.error("todo")
+    State(s => {
+      val (a, nextS) = run(s)
+      (f(a), nextS)
+    })
   def map2[B,C](sb: State[S, B])(f: (A, B) => C): State[S, C] =
-    sys.error("todo")
+    State(s => {
+      val (a, nextS1) = run(s)
+      val (b, nextS2) = sb.run(nextS1)
+      (f(a, b), nextS2)
+    })
   def flatMap[B](f: A => State[S, B]): State[S, B] =
-    sys.error("todo")
+    State(
+      s => {
+        val (a, nextS) = run(s)
+        f(a).run(nextS)
+      }
+    )
 }
 
 sealed trait Input
@@ -128,17 +138,49 @@ case class Machine(locked: Boolean, candies: Int, coins: Int)
 
 object State {
   type Rand[A] = State[RNG, A]
-  def simulateMachine(inputs: List[Input]): State[Machine, (Int, Int)] = ???
+
+  // ex10: implement unit and sequence
+  def unit[S, A](a: A): State[S, A] =
+    State(s => (a, s))
+  def sequence[S, A](sas: List[State[S, A]]): State[S, List[A]] =
+    sas.foldRight(unit[S, List[A]](List()))((h, tail) => h.map2(tail)(_ :: _))
+
+
+  // helper for imperative way to program
+  def get[S]: State[S, S] = State(s => (s, s))
+  def set[S](s: S): State[S, Unit] = State(_ => ((), s))
+  def modify[S](f: S => S): State[S, Unit] = for {
+    s <- get // Gets the current state and assigns it to `s`.
+    _ <- set(f(s)) // Sets the new state to `f` applied to `s`.
+  } yield ()
+}
+
+object CandyMachine {
+  import State._
+
+  def updateStatus = (input: Input) => (s: Machine) => (input, s) match {
+    case (_, Machine(_, 0, _)) => s
+    case (Coin, Machine(true, numCandy, numCoins)) => Machine(false, numCandy, numCoins + 1)
+    case (Coin, Machine(false, _, _)) => s
+    case (Turn, Machine(true, _, _)) => s
+    case (Turn, Machine(false, numCandy, numCoins)) => Machine(true, numCandy - 1, numCoins)
+  }
+
+  // super confusing about this!
+  def simulateMachine(inputs: List[Input]): State[Machine, (Int, Int)] = for {
+    _ <- sequence(inputs.map(modify[Machine] _ compose updateStatus))
+    s <- get
+  } yield (s.coins, s.candies)
+
 }
 
 object Test extends App {
-  import fpinscala.state.RNG.Simple
-
-  val a = new Simple(123)
-  println(RNG.positiveLessThan(3)(a)._1)
-  println(RNG.positiveLessThan(3)(a)._1)
-  println(RNG.positiveLessThan(3)(a)._1)
+  import CandyMachine._
+  import fpinscala.state.Coin._
+  import fpinscala.state.Turn._
 
 
+  val a = CandyMachine.simulateMachine(List(Coin, Turn)).run(Machine(true, 100, 0))
+  println(a)
 
 }
