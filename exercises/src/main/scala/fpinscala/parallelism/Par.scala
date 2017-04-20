@@ -1,9 +1,8 @@
 package fpinscala.parallelism
 
 import java.util.concurrent._
-import java.util.concurrent.atomic.AtomicReference
-
 import language.implicitConversions
+import scala.concurrent.ExecutionContext
 
 object Par {
   type Par[A] = ExecutorService => Future[A]
@@ -54,6 +53,26 @@ object Par {
   // ex4: convert any function A => B to one that evaluates its result async
   def asyncF[A, B](f: A => B): A => Par[B] = {
     a => fork(unit(f(a)))
+  }
+
+  // ex5: sequence
+  def sequence[A](l: List[Par[A]]): Par[List[A]] = fork {
+    if(l.isEmpty) unit(List())
+    else if(l.length == 1) map(l.head)(h => List(h))
+    else {
+      val (left, right) = l.splitAt(l.length / 2)
+      map2(sequence(left), sequence(right))(_ ++ _)
+    }
+  }
+
+  // parallel map with sequence
+  def parMap[A, B](l: List[A])(f: A => B): Par[List[B]] = fork {
+    sequence(l.map(asyncF(f)))
+  }
+
+  // ex6: Implement parFilter
+  def parFilter[A](l: List[A])(f: A => Boolean): Par[List[A]] = fork {
+    ???
   }
   
   def fork[A](a: => Par[A]): Par[A] = // This is the simplest and most natural implementation of `fork`, but there are some problems with it--for one, the outer `Callable` will block waiting for the "inner" task to complete. Since this blocking occupies a thread in our thread pool, or whatever resource backs the `ExecutorService`, this implies that we're losing out on some potential parallelism. Essentially, we're using two threads when one should suffice. This is a symptom of a more serious problem with the implementation, and we will discuss this later in the chapter.
