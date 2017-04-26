@@ -17,7 +17,7 @@ object Par {
     def isCancelled = false 
     def cancel(evenIfRunning: Boolean): Boolean = false 
   }
-  
+
   def map2[A,B,C](a: Par[A], b: Par[B])(f: (A,B) => C): Par[C] = // `map2` doesn't evaluate the call to `f` in a separate logical thread, in accord with our design choice of having `fork` be the sole function in the API for controlling parallelism. We can always do `fork(map2(a,b)(f))` if we want the evaluation of `f` to occur in a separate thread.
     (es: ExecutorService) => {
       val af = a(es) 
@@ -71,9 +71,11 @@ object Par {
   }
 
   // ex6: Implement parFilter
-  def parFilter[A](l: List[A])(f: A => Boolean): Par[List[A]] = fork {
-    ???
+  def parFilter[A](l: List[A])(f: A => Boolean): Par[List[A]] = {
+    val list: List[Par[List[A]]] = l.map(asyncF((a: A) => if(f(a)) List(a) else List()))
+    map(sequence(list))(_.flatten)
   }
+
   
   def fork[A](a: => Par[A]): Par[A] = // This is the simplest and most natural implementation of `fork`, but there are some problems with it--for one, the outer `Callable` will block waiting for the "inner" task to complete. Since this blocking occupies a thread in our thread pool, or whatever resource backs the `ExecutorService`, this implies that we're losing out on some potential parallelism. Essentially, we're using two threads when one should suffice. This is a symptom of a more serious problem with the implementation, and we will discuss this later in the chapter.
     es => es.submit(new Callable[A] { 
@@ -95,6 +97,41 @@ object Par {
     es => 
       if (run(es)(cond).get) t(es) // Notice we are blocking on the result of `cond`.
       else f(es)
+
+  // ex11: implement ChoiceN and then Choice in term of ChoiceN
+  def choiceN[A](n: Par[Int])(choices: List[Par[A]]): Par[A] = es => choices(n(es).get)(es)
+  def choiceWithChoiceN[A](cond: Par[Boolean])(t: Par[A], f: Par[A]): Par[A] =  {
+    choiceN(map(cond)(condition => if(condition) 0 else 1))(List(t, f))
+  }
+
+  // ex12: implement choiceMap
+  def choiceMap[K, V](key: Par[K])(choices: Map[K, Par[V]]): Par[V] =
+    es => choices(key(es).get)(es)
+
+  // ex13: general choice method : chooser
+  def chooser[A,B](p: Par[A])(choices: A => Par[B]): Par[B] =
+    flatMap[A,B](p)(choices)
+
+  // chooser, in general, is same as flatMap
+  def flatMap[A,B](p: Par[A])(choices: A => Par[B]): Par[B] =
+    es => choices(p(es).get)(es)
+
+  def choiceViaChooser[A](p: Par[Boolean])(f: Par[A], t: Par[A]): Par[A] =
+    flatMap(p)(a => if(a) f else t)
+
+  def choiceNChooser[A](p: Par[Int])(choices: List[Par[A]]): Par[A] =
+    flatMap(p)(index => choices(index))
+
+  def join[A](p: Par[Par[A]]): Par[A] =
+    es => p(es).get()(es)
+
+  def joinViaFlatMap[A](a: Par[Par[A]]): Par[A] =
+    flatMap(a)(parA => parA)
+
+  // flatMap = map A to Par[Par[A]] + join Par[Par[A]] to Par[A]
+  def flatMapViaJoin[A,B](p: Par[A])(f: A => Par[B]): Par[B] =
+    join(map(p)(f))
+
 
   /* Gives us infix syntax for `Par`. */
   implicit def toParOps[A](p: Par[A]): ParOps[A] = new ParOps(p)
