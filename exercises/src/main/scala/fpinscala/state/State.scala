@@ -70,6 +70,11 @@ object RNG {
     helper(count, List())(rng)
   }
 
+  def boolean(rng: RNG) : (Boolean, RNG) = {
+    val (n, nextRng) = rng.nextInt
+    (if(n < 0) true else false, nextRng)
+  }
+
   val doubleWithType: Rand[Double] = map(nonNegativeInt)(_ / (Int.MaxValue.toDouble + 1))
 
   def map2[A,B,C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] =
