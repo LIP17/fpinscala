@@ -104,6 +104,10 @@ trait Stream[+A] {
       .takeWhile(!_._2.isEmpty)
       .forAll{ case (h1, h2) => h1 == h2 }
 
+  // special case of `zipWith`
+  def zip[B](s2: Stream[B]): Stream[(A,B)] =
+    zipWithUnfold(s2)((_,_))
+
   // ex15: implement tails with unfold
   // eg: Stream(1,2,3) => Stream(Stream(1,2,3), Stream(2, 3), Stream(3), Stream())
   def tails: Stream[Stream[A]] = unfold(this){
